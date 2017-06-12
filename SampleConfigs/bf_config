@@ -1,0 +1,25 @@
+0                   load checkpoint
+1000                check frequency
+50                  calculation frequency
+3.d0                 density
+20                   a chain length
+1                    b chain length
+3000000                 no. of timesteps
+0               no. of equilibration timesteps
+1.d0                 temperature
+25.d0                chi1
+60.d0                chi2 
+100.d0                chi3
+0.2d0                initial max bond length
+0.55d0               max bond length
+0.001              dt
+64                   dim_x        
+64                  dim_y
+64                   dim_z
+-230435            random seed
+10.0d0                sigma
+0.5d0                comp
+0.3333               vol_a
+0.3333               vol_b
+1.d0                 phi_a - phi_b
+2.0d0                halo length

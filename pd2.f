@@ -153,4 +153,5 @@ c ran3() Pseudo-random number generator, from Numerical Recipes.
 
 c Subroutines for output in standardized formats (e.g., XYZ)
       include 'Generic/gen_output.f'
+      include 'Generic/dynamics.f'
 c/////////////////////////////////////////////////////////////////////////////

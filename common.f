@@ -78,7 +78,7 @@ c
 
       ! Valid choices for SIM_TYPE: ROTAXANE, BINARY_FLUID, MEMBRANE, BOTTLEBRUSH
       integer SIM_TYPE
-      parameter(SIM_TYPE=NANOPARTICLE)
+      parameter(SIM_TYPE=BINARY_FLUID)
 
       integer USE_MIN_MAX
       parameter(USE_MIN_MAX=NO)

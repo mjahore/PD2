@@ -802,10 +802,10 @@ c
       if (cluster_rank .eq. MASTER) then
  
          ! Mean A bond length.
-         write(14,*) itime, dsqrt(tmp_a/(chain_a-1)/cluster_size/a_poly)
+         write(14,*) itime, tmp_a/(chain_a-1)/cluster_size/a_poly
 
          ! Mean B bond length.
-         write(15,*) itime, dsqrt(tmp_b/(chain_b-1)/cluster_size/b_poly)
+         write(15,*) itime, tmp_b/(chain_b-1)/cluster_size/b_poly
 
          close(14)
          close(15)
@@ -827,7 +827,7 @@ c
       if (chain_b .gt. 1) then
          k = 3*(cluster_size*n_poly)
       else
-         k = 3*(cluster_size*a_poly)+1
+         k = 3*(cluster_size*n_poly)
       endif
 
       call MPI_REDUCE(DBL_BUF, DBL_BUF1, k,MPI_DOUBLE_PRECISION,MPI_SUM,
@@ -839,7 +839,7 @@ c
       if (chain_b .gt. 1) then
          k = 3*(cluster_size*n_poly)
       else
-         k = 3*(cluster_size*a_poly)+1
+         k = 3*(cluster_size*n_poly)
       endif
 
       call MPI_BCAST(DBL_BUF1,k,MPI_DOUBLE_PRECISION,MASTER,
@@ -874,8 +874,8 @@ c
 
       if (cluster_rank .eq. MASTER) then
        if(chain_a .gt. 1) then
-         write(12,*) itime, dsqrt(tmp_a/(chain_a * 
-     >                      cluster_size * a_poly))
+         rg_a = tmp_a / (cluster_size * a_poly * chain_a)
+         write(12,*) itime, dsqrt(rg_a) 
        endif
 
        if (chain_b .gt. 1) then

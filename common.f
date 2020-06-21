@@ -9,7 +9,7 @@ c The following lines are constants. Do not change
 c them.
 c
       character*8 code_version
-      parameter(code_version='1.2.15')
+      parameter(code_version='1.2.16')
       integer YES, NO
       parameter(YES=1, NO=0)
       integer FENE, HARMONIC
@@ -19,9 +19,13 @@ c
       integer PHASE_SEPARATED, DISORDERED,WETTING
       parameter(PHASE_SEPARATED=0, DISORDERED=1,WETTING=2)
       integer BINARY_FLUID, MEMBRANE, MC2D, THIN_FILM, ROTAXANE
-      integer BOTTLEBRUSH, NANOPARTICLE
-      parameter(BINARY_FLUID=0, THIN_FILM=4)
+      integer BOTTLEBRUSH, NANOPARTICLE,DIBLOCK
+      parameter(BINARY_FLUID=0, MEMBRANE=1, MC2D=3, THIN_FILM=4,
+     >          ROTAXANE=5,BOTTLEBRUSH=6,NANOPARTICLE=7,DIBLOCK=8)
      
+      integer LINEAR,RING,POLYCATENANE
+      parameter(LINEAR=0, RING=1, POLYCATENANE=2)
+
 
 c
 c SUPPORTED SYSTEM SIZE! VERY IMPORTANT PARAMETER!!!!
@@ -40,7 +44,7 @@ c
       parameter(CP_LOAD_TYPE=LOAD_AT_QUENCH)
 
       integer BOND_TYPE
-      parameter(BOND_TYPE=HARMONIC)
+      parameter(BOND_TYPE=FENE)
  
       integer DISABLE_BRIDGES
       parameter(DISABLE_BRIDGES=YES)
@@ -63,6 +67,9 @@ c
       integer CONFIG_TYPE
       parameter(CONFIG_TYPE=DISORDERED)
 
+      integer POLYMER_TYPE
+      parameter(POLYMER_TYPE=LINEAR)
+
       double precision LAMBDA
       parameter(LAMBDA=0.5d0)
 
@@ -71,7 +78,7 @@ c
 
       ! Valid choices for SIM_TYPE: ROTAXANE, BINARY_FLUID, MEMBRANE, BOTTLEBRUSH
       integer SIM_TYPE
-      parameter(SIM_TYPE=BINARY_FLUID)
+      parameter(SIM_TYPE=NANOPARTICLE)
 
       integer USE_MIN_MAX
       parameter(USE_MIN_MAX=NO)

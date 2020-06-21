@@ -33,8 +33,8 @@ c
 c
 c Polymer Bond Values
 c 
-      double precision poly_bond_a, poly_bond_b
-      common/bond_lengths/poly_bond_a,poly_bond_b
+      double precision poly_bond_a, poly_bond_b, poly_bond_g
+      common/bond_lengths/poly_bond_a,poly_bond_b,poly_bond_g
 
 c
 c Clusters

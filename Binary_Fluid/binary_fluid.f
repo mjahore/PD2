@@ -171,12 +171,13 @@ c Transfer particles outside the slab to the appropriate neighbor:
           call distribute_halo_down3d()
        endif
 
+
 c Calculate initial number of simulated particles.
        call bf_particle_check()
 
        ! Do we load a checkpoint?
        if (load_cp .eq. 1 .and. CP_LOAD_TYPE .eq. LOAD_AT_RELAX) then
-          call bf_read_checkpoint_master_level()
+          call bf_read_checkpoint_master_level_bin()
        else if (load_cp .eq. 1 .and. 
      >          CP_LOAD_TYPE .eq. LOAD_AT_QUENCH) then
            goto 200
@@ -225,7 +226,8 @@ c Equilibration loop:
       enddo
 
       ! Write checkpoint
-      call bf_write_checkpoint_master_level()
+      ! write(*,*) 'Turn checkpoint back on.'
+      call bf_write_checkpoint_master_level_bin()
 
 c Now that the system has relaxed, we proceed to process the system
 c while considered particle species/spin/color
@@ -240,7 +242,7 @@ c LOAD_AT_QUENCH entry point
 
        ! Do we load a checkpoint?
        if (load_cp .eq. 1 .and. CP_LOAD_TYPE .eq. LOAD_AT_QUENCH) then
-          call bf_read_checkpoint_master_level()
+          call bf_read_checkpoint_master_level_bin()
        else
           itime0 = equil_time
        endif
@@ -276,6 +278,10 @@ c LOAD_AT_QUENCH entry point
          endif
 
          if (mod(itime,calc_freq) .eq. 0) then
+
+            ! Rouse Mode analysis
+            call gen_calc_rouse_modes(1, (itime-itime0)/calc_freq)
+
             ! Collect particles at master level for snapshots and bridges and all of that.
             call collect_master_level3d()
             
@@ -327,7 +333,7 @@ c LOAD_AT_QUENCH entry point
             call collect_master_level3d()
             call bf_write_out_master_level()
             call bf_write_snapshot_master_level()
-            call bf_write_checkpoint_master_level()
+            call bf_write_checkpoint_master_level_bin()
 
             !call collect_master_level3d_poly()
             !call bf_write_out_master_level_poly()
@@ -356,7 +362,7 @@ c
       endif
 
       ! Write checkpoint where we are.
-      call bf_write_checkpoint_master_level()
+      call bf_write_checkpoint_master_level_bin()
 
       ! Finalize and clean up.
       call MPI_FINALIZE(mpi_err)
@@ -369,13 +375,13 @@ c
 c
 c bf_intrachain_dpd() - Calculates intrachain interactions in polymers.
 c                
-      subroutine bf_intrachain_dpd(p_type, l_bond)
+      subroutine bf_intrachain_dpd(p_type, r_eq, l_bond)
       implicit none
       include 'mpif.h'
       include 'common.f'
       include 'Binary_Fluid/binary_fluid_var.f'
       double precision r_time1, r_time2, f_sum, f_comp, max_bond2
-      double precision bond_strength, pref_bond, l_bond
+      double precision bond_strength, pref_bond, l_bond, r_eq
       integer p_type, i, j, k, l, chain_length
       integer id_i, id_j, lmn, last_particle
       integer species_ok
@@ -391,7 +397,7 @@ c
 
       ! d_els2 = max bond length squared.
       pref_bond     = l_bond
-      max_bond2     = l_bond**2
+      max_bond2     = (l_bond - r_eq)**2
       bond_strength = chi3
 
       ! Loop through all potential members of this node (i.e. loop through
@@ -402,7 +408,7 @@ c
             ! Get neighboring monomer, which is by definition the absolute index 
             ! of i + 1. Furthermore, get its LOCAL index.
             id_i = i
-                id_j = members(logical_id(id_i)+1)
+            id_j = members(logical_id(id_i)+1)
 
             ! Verify that these particles are part of the same chain.
             if (p_flag(id_i) .eq. p_flag(id_j) .and. id_j .gt. 0 .and.
@@ -415,15 +421,15 @@ c
                dy = poly_y(id_i) - poly_y(id_j)
                dz = poly_z(id_i) - poly_z(id_j)
 
-               dr = dx**2 + dy**2 + dz**2
+               dr = dsqrt(dx**2 + dy**2 + dz**2)
 
                ! Force from FENE potential:
                if (BOND_TYPE .eq. FENE) then
-                  f_sum = -bond_strength / (1.d0 - dr/max_bond2)
+                  f_sum = -bond_strength /(1.d0-(dr-r_eq)**2/max_bond2)
+     >                     * (1.d0 - r_eq/dr)
                else if (BOND_TYPE .eq. HARMONIC) then
-                  f_sum = -bond_strength * (dsqrt(dr) - pref_bond)
-                               !(pref_bond/dsqrt(dr)-1.d0)
-                  utot  = utot + 0.5d0 * bond_strength * dr**2
+                  f_sum = -bond_strength * (1.d0 - pref_bond/dr)
+                  utot  = utot + 0.5d0 * bond_strength * dr
                endif
 
                ! Add components to force arrays:
@@ -446,8 +452,10 @@ c
 
                if (p_type .eq. 1) then 
                   poly_bond_a = poly_bond_a + dr
-               else 
+               else if (p_type .eq. -1) then 
                   poly_bond_b = poly_bond_b + dr
+               else if (p_type .ge. 5) then
+                  poly_bond_g = poly_bond_g + dr
                endif
             endif
          endif
@@ -787,6 +795,7 @@ c
       ! Initialize polymer bond values
       poly_bond_a = 0.d0
       poly_bond_b = 0.d0
+      poly_bond_g = 0.d0
 
       !! Timing
       r_time1 = MPI_WTIME()
@@ -795,12 +804,12 @@ c
       ! Do intrachain interactions:
       if (chain_a .gt. 1) then
          ! Do all intrachain interactions in all 'a' polymers:
-         call bf_intrachain_dpd(1,max_bond)
+         call bf_intrachain_dpd(1,d_els,max_bond)
       endif
 
       if (chain_b .gt. 1) then
          ! Do all intrachain interactions in all 'b' polymers:
-         call bf_intrachain_dpd(-1,max_bond)
+         call bf_intrachain_dpd(-1,d_els,max_bond)
       endif
  
       ! Entanglement fores to prevent chain crossing.
@@ -1088,14 +1097,15 @@ c                   length for each type of polymer.
       ! type a.
       a_no   = int(slab_x*slab_y*slab_z*(phi_diff+1)/(2*vol_a))
       a_poly = int(a_no/chain_a)
+      a_no   = a_poly * chain_a
 
       ! Similarly, calculate b_no.
       b_no   = int((slab_x*slab_y*slab_z-a_no*vol_a)/vol_b)
       b_poly = int(b_no/chain_b)
+      b_no   = b_poly * chain_b
 
       ! Total number of polymers
-      !local_no = a_no + b_no
-      local_no  = a_poly*chain_a + b_poly*chain_b
+      local_no = a_no + b_no
       n_poly = a_poly+b_poly
 
       ! IF we're master, write simulation details to disk.
@@ -1153,11 +1163,7 @@ c                   length for each type of polymer.
           poly_z(k) = z(k)
 
           ! Group monomers into chains.
-          if (chain_b .gt. 1) then
-            p_flag(k) = i+cluster_rank*n_poly
-          else
-            p_flag(k) = 1+i+cluster_rank*a_poly
-          endif
+          p_flag(k) = i+cluster_rank*n_poly
 
           ! Make sure we know the particle type.
           tmp_no = i + cluster_rank*n_poly
@@ -1195,11 +1201,7 @@ c                   length for each type of polymer.
               poly_z(k) = z(k)
  
               ! Group monomers into chains.
-              if (chain_b .gt. 1) then
-                 p_flag(k) = i+cluster_rank*n_poly
-              else
-                 p_flag(k) = 1+i+cluster_rank*a_poly
-              endif
+              p_flag(k) = i+cluster_rank*n_poly
          enddo
       enddo
 
@@ -1229,11 +1231,7 @@ c                   length for each type of polymer.
           poly_z(k) = z(k)
 
           ! Group monomers into chains.
-          if (chain_b .gt. 1) then
-             p_flag(k) = i+cluster_rank*n_poly+a_poly
-          else
-             p_flag(k) = 1
-          endif
+          p_flag(k) = i+cluster_rank*n_poly+a_poly
 
           ! Make sure we know the particle type.
           tmp_no = i + a_poly + cluster_rank*n_poly
@@ -1271,11 +1269,7 @@ c                   length for each type of polymer.
               poly_z(k) = z(k)
 
               ! Group monomers into chains.
-              if (chain_b .gt. 1) then
-                 p_flag(k) = i+cluster_rank*n_poly+a_poly
-              else
-                 p_flag(k) = 1
-              endif
+              p_flag(k) = i+cluster_rank*n_poly+a_poly
           enddo
       enddo
 
@@ -1392,14 +1386,15 @@ c
       ! type a.
       a_no   = int(slab_x*slab_y*slab_z*(phi_diff+1)/(2*vol_a))
       a_poly = int(a_no/chain_a)
+      a_no   = a_poly * chain_a
 
       ! Similarly, calculate b_no.
       b_no   = int((slab_x*slab_y*slab_z-a_no*vol_a)/vol_b)
       b_poly = int(b_no/chain_b)
+      b_no   = b_poly * chain_b
 
       ! Total number of polymers
-      !local_no = a_no + b_no
-      local_no  = a_poly*chain_a + b_poly*chain_b
+      local_no = a_no + b_no
       n_poly = a_poly+b_poly
 
       ! IF we're master, write simulation details to disk.

@@ -129,21 +129,29 @@ c
       include 'mpif.h'
       include 'common.f'
       include 'Binary_Fluid/binary_fluid_var.f'
+      include 'Nanoparticle/nanoparticle_var.f'
 
       double precision v_t ! Velocity total (squared)
       double precision v1t ! Temporary
-      double precision degrees_freedom
+      double precision degrees_freedom, mass
       integer i, lmn
 
       v_t = 0.d0
       v1t = 0.d0
 
       degrees_freedom = 3 * (particle_count) - 3 
-      !degrees_freedom = 3 * (particle_count)*cluster_size -3 
 
       ! Calculate total velocities.
       do i=1, local_no
-        v_t = v_t + vx(i)**2 + vy(i)**2 + vz(i)**2
+        if (species(i) .eq. 2) then
+           mass = n_mass
+        else if (species(i) .eq. 5) then
+           mass = g_mass
+        else
+           mass = 1.d0
+        endif
+        !v_t = v_t + (vx(i)**2 + vy(i)**2 + vz(i)**2)
+        v_t = v_t + mass*(vx(i)**2 + vy(i)**2 + vz(i)**2)
       enddo
 
 
@@ -156,6 +164,74 @@ c
       end
 
 c
+c bf_monomer_id() - Returns the monomer position j within
+c                   the chain.
+c
+      integer function bf_monomer_id(idx)
+      implicit none
+      include 'mpif.h'
+      include 'common.f'
+      include 'Binary_Fluid/binary_fluid_var.f'
+      integer id, N, idx
+      
+      id = mod(logical_id(idx), a_no + b_no)
+      if (id .eq. 0) then
+         id = a_no + b_no
+      endif
+
+      if (species(idx) .eq. 1) then
+         N = chain_a
+      else if (species(idx) .eq. -1) then
+         id = id - a_no
+          N = chain_b
+      endif
+
+      id = mod(id, N)
+      bf_monomer_id = id + 1
+
+      if (species(idx) .eq. 1 .and. bf_monomer_id .gt. chain_a) 
+     >then
+             write(*,*) 'WARNING: Invalid monomer id.'
+      else if (species(idx) .eq. -1 .and. bf_monomer_id .gt. chain_b)
+     >then
+         write(*,*) 'WARNING: Invalid monomer id.'
+      endif
+      return
+      end
+
+c
+c bf_polymer_id() - Returns a unique sequential identifier for the
+c                   provided p_flag
+      integer function bf_polymer_id(idx)
+      implicit none
+      include 'mpif.h'
+      include 'common.f'
+      include 'Binary_Fluid/binary_fluid_var.f'
+      integer id, rank, idx, stride
+
+      if (species(idx) .eq. 1) then
+         stride = a_poly
+         id   = mod(p_flag(idx), a_poly + b_poly)
+         if (id .eq. 0) then
+            id = a_poly
+         endif
+      else if (species(idx) .eq. -1) then
+         stride = b_poly
+         id   = mod(p_flag(idx), a_poly + b_poly)
+         if (id .eq. 0) then
+            id = b_poly
+         else
+            id = id - a_poly
+         endif
+      endif
+
+      rank = (p_flag(idx) - 1) / (a_poly + b_poly)
+
+      bf_polymer_id = rank*stride + id 
+
+      return
+      end
+c
 c bf_sys_momentum() - Returns net momentum of system.
 c
       subroutine bf_sys_momentum(px, py, pz)
@@ -163,6 +239,7 @@ c
       include 'mpif.h'
       include 'common.f'
       include 'Binary_Fluid/binary_fluid_var.f'
+      include 'Nanoparticle/nanoparticle_var.f'
 
       double precision vx_t, vy_t, vz_t ! Velocity totals
       double precision vx1t, vy1t, vz1t ! Temporary
@@ -176,7 +253,13 @@ c
 
       ! Calculate total velocities.
       do i=1, local_no
-        mass = 1.d0
+        if (species(i) .eq. 2) then
+           mass = n_mass
+        else if (species(i) .eq. 5) then
+           mass = g_mass
+        else 
+           mass = 1.d0
+        endif
         vx_t = vx_t + mass*vx(i)
         vy_t = vy_t + mass*vy(i)
         vz_t = vz_t + mass*vz(i)
